@@ -120,6 +120,7 @@ Run the pipeline in order:
 ```bash
 # Using uv (recommended)
 uv run 01_data_collection.py
+
 # Or using python directly
 python 01_data_collection.py
 ```
@@ -128,6 +129,7 @@ python 01_data_collection.py
 ```bash
 # Using uv (recommended)
 uv run 02_eda.py
+
 # Or using python directly
 python 02_eda.py
 ```
@@ -136,6 +138,7 @@ python 02_eda.py
 ```bash
 # Using uv (recommended)
 uv run 03_signal_detection.py
+
 # Or using python directly
 python 03_signal_detection.py
 ```
@@ -144,6 +147,7 @@ python 03_signal_detection.py
 ```bash
 # Using uv (recommended)
 uv run streamlit run app.py
+
 # Or using streamlit directly
 streamlit run app.py
 ```
@@ -197,4 +201,5 @@ streamlit run app.py
 
 Sebastian Lijewski
 PhD in Pharmaceutical Sciences
+
 
