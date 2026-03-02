@@ -1,3 +1,4 @@
+import logging
 """
 ==============================================================================
 02_eda.py — Exploratory Data Analysis of SSRI Adverse Event Profiles
@@ -30,30 +31,23 @@ import matplotlib.ticker as ticker
 import seaborn as sns
 import numpy as np
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
 
-# Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
-# Visual style — dark, professional theme
 plt.style.use("seaborn-v0_8-darkgrid")
 sns.set_context("talk", font_scale=0.9)
 
-# Color palette — one distinct color per SSRI for consistent identification
 DRUG_COLORS = {
-    "fluoxetine":   "#E63946",   # Red
-    "sertraline":   "#457B9D",   # Steel blue
-    "paroxetine":   "#2A9D8F",   # Teal
-    "escitalopram": "#E9C46A",   # Gold
-    "citalopram":   "#F4A261",   # Orange
-    "fluvoxamine":  "#264653",   # Dark blue-green
+    "fluoxetine":   "#E63946",
+    "sertraline":   "#457B9D",
+    "paroxetine":   "#2A9D8F",
+    "escitalopram": "#E9C46A",
+    "citalopram":   "#F4A261",
+    "fluvoxamine":  "#264653",
 }
 
-# MedDRA terms related to suicidality (must match 01_data_collection.py)
 SUICIDALITY_TERMS = [
     "Suicidal ideation",
     "Suicide attempt",
@@ -65,9 +59,6 @@ SUICIDALITY_TERMS = [
 ]
 
 
-# =============================================================================
-# DATA LOADING
-# =============================================================================
 
 def load_data() -> tuple:
     """
@@ -82,16 +73,13 @@ def load_data() -> tuple:
     df_totals = pd.read_csv(os.path.join(DATA_DIR, "ssri_totals.csv"))
     df_background = pd.read_csv(os.path.join(DATA_DIR, "background_totals.csv"))
 
-    print(f"Loaded {len(df_reactions):,} reaction records "
+    logging.info(f"Loaded {len(df_reactions):,} reaction records "
           f"across {df_reactions['generic_name'].nunique()} SSRIs")
-    print(f"Total reports per drug:\n{df_totals[['display_name', 'total_reports']].to_string(index=False)}\n")
+    logging.info(f"Total reports per drug:\n{df_totals[['display_name', 'total_reports']].to_string(index=False)}\n")
 
     return df_reactions, df_totals, df_background
 
 
-# =============================================================================
-# VISUALIZATION FUNCTIONS
-# =============================================================================
 
 def plot_total_reports(df_totals: pd.DataFrame):
     """
@@ -102,7 +90,6 @@ def plot_total_reports(df_totals: pd.DataFrame):
     """
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Sort by total reports descending
     df_sorted = df_totals.sort_values("total_reports", ascending=True)
 
     colors = [DRUG_COLORS[name] for name in df_sorted["generic_name"]]
@@ -114,7 +101,6 @@ def plot_total_reports(df_totals: pd.DataFrame):
         linewidth=0.5,
     )
 
-    # Add value labels on bars
     for bar, value in zip(bars, df_sorted["total_reports"]):
         ax.text(
             bar.get_width() + max(df_sorted["total_reports"]) * 0.01,
@@ -137,7 +123,7 @@ def plot_total_reports(df_totals: pd.DataFrame):
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "01_total_reports_by_ssri.png"), dpi=150)
     plt.close()
-    print("  ✓ Saved: 01_total_reports_by_ssri.png")
+    logging.info("  ✓ Saved: 01_total_reports_by_ssri.png")
 
 
 def plot_top_reactions_per_drug(df_reactions: pd.DataFrame, top_n: int = 15):
@@ -177,7 +163,6 @@ def plot_top_reactions_per_drug(df_reactions: pd.DataFrame, top_n: int = 15):
             ticker.FuncFormatter(lambda x, _: f"{x:,.0f}")
         )
 
-    # Remove any unused subplots
     for idx in range(n_drugs, len(axes)):
         fig.delaxes(axes[idx])
 
@@ -194,7 +179,7 @@ def plot_top_reactions_per_drug(df_reactions: pd.DataFrame, top_n: int = 15):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 02_top_reactions_per_ssri.png")
+    logging.info("  ✓ Saved: 02_top_reactions_per_ssri.png")
 
 
 def plot_suicidality_comparison(df_reactions: pd.DataFrame):
@@ -205,16 +190,14 @@ def plot_suicidality_comparison(df_reactions: pd.DataFrame):
     This is the key clinical visualization — it directly addresses the
     research question about differential suicidality signaling.
     """
-    # Filter for suicidality-related terms only
     df_suicidal = df_reactions[
         df_reactions["reaction_term"].isin(SUICIDALITY_TERMS)
     ].copy()
 
     if df_suicidal.empty:
-        print("  ⚠ No suicidality terms found in the data. Skipping plot.")
+        logging.info("  ⚠ No suicidality terms found in the data. Skipping plot.")
         return
 
-    # Pivot: rows = reaction terms, columns = drugs
     df_pivot = df_suicidal.pivot_table(
         index="reaction_term",
         columns="display_name",
@@ -222,13 +205,11 @@ def plot_suicidality_comparison(df_reactions: pd.DataFrame):
         fill_value=0,
     )
 
-    # Sort by total count across all drugs
     df_pivot["_total"] = df_pivot.sum(axis=1)
     df_pivot = df_pivot.sort_values("_total", ascending=False).drop("_total", axis=1)
 
     fig, ax = plt.subplots(figsize=(14, 8))
 
-    # Create grouped bar chart
     n_terms = len(df_pivot)
     n_drugs = len(df_pivot.columns)
     bar_width = 0.12
@@ -246,7 +227,6 @@ def plot_suicidality_comparison(df_reactions: pd.DataFrame):
                        {d: n for d, n in zip(DRUG_COLORS.keys(),
                         [c for c in display_order])}
                        .items() if v == drug_col]
-            # Get generic name from display name
             generic_name = drug_col.split(" (")[0].lower()
             color = DRUG_COLORS.get(generic_name, "#999999")
             ax.bar(
@@ -285,7 +265,7 @@ def plot_suicidality_comparison(df_reactions: pd.DataFrame):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 03_suicidality_comparison.png")
+    logging.info("  ✓ Saved: 03_suicidality_comparison.png")
 
 
 def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
@@ -296,7 +276,6 @@ def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
     This reveals patterns: which drugs share similar adverse event profiles,
     and which have unique signatures.
     """
-    # Get top N reactions by total count across all drugs
     top_reactions = (
         df_reactions.groupby("reaction_term")["count"]
         .sum()
@@ -306,7 +285,6 @@ def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
 
     df_top = df_reactions[df_reactions["reaction_term"].isin(top_reactions)]
 
-    # Pivot to matrix form
     heatmap_data = df_top.pivot_table(
         index="reaction_term",
         columns="display_name",
@@ -314,13 +292,11 @@ def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
         fill_value=0,
     )
 
-    # Sort by total: most common reactions at the top
     heatmap_data["_total"] = heatmap_data.sum(axis=1)
     heatmap_data = heatmap_data.sort_values("_total", ascending=False).drop(
         "_total", axis=1
     )
 
-    # Log-scale for better color distribution (many orders of magnitude)
     heatmap_log = np.log10(heatmap_data.replace(0, 1))
 
     fig, ax = plt.subplots(figsize=(12, 14))
@@ -355,32 +331,29 @@ def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 04_reaction_heatmap.png")
+    logging.info("  ✓ Saved: 04_reaction_heatmap.png")
 
 
-# =============================================================================
-# MAIN
-# =============================================================================
 
 def main():
     """Execute the full EDA pipeline."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    print("=" * 70)
-    print("EXPLORATORY DATA ANALYSIS — SSRI Adverse Events (FAERS)")
-    print("=" * 70)
+    logging.info("=" * 70)
+    logging.info("EXPLORATORY DATA ANALYSIS — SSRI Adverse Events (FAERS)")
+    logging.info("=" * 70)
 
     df_reactions, df_totals, df_background = load_data()
 
-    print("\nGenerating visualizations...\n")
+    logging.info("\nGenerating visualizations...\n")
     plot_total_reports(df_totals)
     plot_top_reactions_per_drug(df_reactions)
     plot_suicidality_comparison(df_reactions)
     plot_reaction_heatmap(df_reactions)
 
-    print(f"\n{'=' * 70}")
-    print("EDA COMPLETE — All figures saved to: outputs/")
-    print(f"{'=' * 70}")
+    logging.info(f"\n{'=' * 70}")
+    logging.info("EDA COMPLETE — All figures saved to: outputs/")
+    logging.info(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

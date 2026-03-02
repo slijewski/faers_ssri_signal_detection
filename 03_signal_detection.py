@@ -1,3 +1,4 @@
+import logging
 """
 Pharmacovigilance signal detection for SSRI suicidality using
 PRR, ROR, and Chi-squared metrics.
@@ -11,19 +12,15 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
-# Config
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
-# Signal detection thresholds (Evans et al., 2001)
-PRR_THRESHOLD = 2.0    # Minimum PRR to consider a signal
-CHI2_THRESHOLD = 4.0   # Minimum χ² (≈ p < 0.05)
-MIN_REPORTS = 3        # Minimum number of cases
+PRR_THRESHOLD = 2.0
+CHI2_THRESHOLD = 4.0
+MIN_REPORTS = 3
 
-# Suicidality-related MedDRA terms to analyze
-# Note: openFDA returns terms in UPPERCASE — we normalize to upper for matching
 SUICIDALITY_TERMS = [
     "SUICIDAL IDEATION",
     "SUICIDE ATTEMPT",
@@ -34,14 +31,12 @@ SUICIDALITY_TERMS = [
     "DEPRESSION SUICIDAL",
 ]
 
-# Color scheme for signal status
 SIGNAL_COLORS = {
     "SIGNAL": "#E63946",
     "NO SIGNAL": "#457B9D",
     "INSUFFICIENT DATA": "#ADB5BD",
 }
 
-# Drug display colors (consistent with 02_eda.py)
 DRUG_COLORS = {
     "fluoxetine":   "#E63946",
     "sertraline":   "#457B9D",
@@ -52,7 +47,6 @@ DRUG_COLORS = {
 }
 
 
-# Analysis functions
 
 def calculate_prr(a: int, b: int, c: int, d: int) -> dict:
     """
@@ -79,13 +73,11 @@ def calculate_prr(a: int, b: int, c: int, d: int) -> dict:
     -------
     dict with keys: 'prr', 'prr_lower', 'prr_upper'
     """
-    # Guard against division by zero
     if a == 0 or (a + b) == 0 or c == 0 or (c + d) == 0:
         return {"prr": 0.0, "prr_lower": 0.0, "prr_upper": 0.0}
 
     prr = (a / (a + b)) / (c / (c + d))
 
-    # Log-normal 95% confidence interval
     try:
         se_ln = math.sqrt(1/a - 1/(a + b) + 1/c - 1/(c + d))
         ln_prr = math.log(prr)
@@ -157,8 +149,6 @@ def calculate_chi_squared(a: int, b: int, c: int, d: int) -> float:
     float
         Yates-corrected χ² statistic. Values ≥ 4.0 ≈ p < 0.05.
     """
-    # Cast to float64 to prevent integer overflow with large FAERS numbers
-    # (the denominator can exceed int64 range when N > 20 million)
     a, b, c, d = float(a), float(b), float(c), float(d)
     n = a + b + c + d
     numerator = n * (abs(a * d - b * c) - n / 2) ** 2
@@ -196,7 +186,6 @@ def classify_signal(prr: float, chi2: float, n_cases: int) -> str:
     return "NO SIGNAL"
 
 
-# Pipeline
 
 def run_signal_detection() -> pd.DataFrame:
     """
@@ -211,24 +200,19 @@ def run_signal_detection() -> pd.DataFrame:
     pd.DataFrame
         Results with columns: drug, reaction, a, b, c, d, PRR, ROR, χ², signal.
     """
-    # Load data
     df_reactions = pd.read_csv(os.path.join(DATA_DIR, "ssri_reaction_counts.csv"))
     df_totals = pd.read_csv(os.path.join(DATA_DIR, "ssri_totals.csv"))
     df_background = pd.read_csv(os.path.join(DATA_DIR, "background_totals.csv"))
 
     total_faers = df_background["total_faers_reports"].iloc[0]
 
-    # Build a lookup: {generic_name: total_reports}
     drug_totals = dict(zip(df_totals["generic_name"], df_totals["total_reports"]))
 
-    # Build a lookup: {(generic_name, REACTION_TERM): count}
-    # Normalize reaction terms to uppercase for consistent matching
     reaction_lookup = {}
     for _, row in df_reactions.iterrows():
         key = (row["generic_name"], row["reaction_term"].upper())
         reaction_lookup[key] = row["count"]
 
-    # Build a lookup: {REACTION_TERM: background_count}
     bg_lookup = {
         term.upper(): count
         for term, count in zip(df_background["reaction_term"],
@@ -238,33 +222,23 @@ def run_signal_detection() -> pd.DataFrame:
     results = []
 
     for drug in drug_totals.keys():
-        drug_total = drug_totals[drug]  # a + b
+        drug_total = drug_totals[drug]
         display_name = df_totals.loc[
             df_totals["generic_name"] == drug, "display_name"
         ].iloc[0]
 
         for reaction in SUICIDALITY_TERMS:
-            # --- Construct the 2×2 contingency table ---
-            # a = reports of THIS drug with THIS reaction
             a = reaction_lookup.get((drug, reaction), 0)
 
-            # b = reports of THIS drug with ANY OTHER reaction
-            # (total reports for this drug minus reports with this reaction)
             b = drug_total - a
 
-            # c = reports of ALL OTHER drugs with THIS reaction
-            # (total background count for this reaction minus this drug's count)
             total_reaction = bg_lookup.get(reaction, 0)
             c = total_reaction - a
 
-            # d = reports of ALL OTHER drugs with ANY OTHER reaction
-            # (total FAERS minus a, b, and c)
             d = total_faers - a - b - c
 
-            # Ensure non-negative values (defensive)
             a, b, c, d = max(a, 0), max(b, 0), max(c, 0), max(d, 0)
 
-            # --- Calculate disproportionality metrics ---
             prr_result = calculate_prr(a, b, c, d)
             ror_result = calculate_ror(a, b, c, d)
             chi2 = calculate_chi_squared(a, b, c, d)
@@ -290,7 +264,6 @@ def run_signal_detection() -> pd.DataFrame:
 
     df_results = pd.DataFrame(results)
 
-    # Save results
     df_results.to_csv(
         os.path.join(OUTPUT_DIR, "signal_detection_results.csv"), index=False
     )
@@ -298,9 +271,6 @@ def run_signal_detection() -> pd.DataFrame:
     return df_results
 
 
-# =============================================================================
-# VISUALIZATION FUNCTIONS
-# =============================================================================
 
 def plot_forest_prr(df: pd.DataFrame):
     """
@@ -309,12 +279,11 @@ def plot_forest_prr(df: pd.DataFrame):
     Forest plots are the standard visualization in pharmacoepidemiology
     for comparing effect measures across drugs.
     """
-    # Filter for the primary outcome (normalized to uppercase)
     df_si = df[df["reaction_term"] == "SUICIDAL IDEATION"].copy()
     df_si = df_si.sort_values("PRR", ascending=True)
 
     if df_si.empty:
-        print("  ⚠ No 'Suicidal ideation' data. Skipping forest plot.")
+        logging.info("  ⚠ No 'Suicidal ideation' data. Skipping forest plot.")
         return
 
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -322,7 +291,6 @@ def plot_forest_prr(df: pd.DataFrame):
     y_positions = range(len(df_si))
     colors = [DRUG_COLORS.get(name, "#999") for name in df_si["generic_name"]]
 
-    # Plot confidence intervals as horizontal lines
     for i, (_, row) in enumerate(df_si.iterrows()):
         ax.plot(
             [row["PRR_lower_95CI"], row["PRR_upper_95CI"]],
@@ -331,7 +299,6 @@ def plot_forest_prr(df: pd.DataFrame):
             linewidth=2,
             solid_capstyle="round",
         )
-        # Plot point estimate as a diamond
         ax.scatter(
             row["PRR"],
             i,
@@ -342,7 +309,6 @@ def plot_forest_prr(df: pd.DataFrame):
             edgecolor="white",
             linewidth=1,
         )
-        # Add numeric label
         ax.text(
             row["PRR_upper_95CI"] + 0.05,
             i,
@@ -351,10 +317,8 @@ def plot_forest_prr(df: pd.DataFrame):
             fontsize=9,
         )
 
-    # Reference line at PRR = 1 (no disproportionality)
     ax.axvline(x=1, color="gray", linestyle="--", linewidth=1, alpha=0.7,
                label="PRR = 1 (no signal)")
-    # Threshold line at PRR = 2 (Evans et al. criterion)
     ax.axvline(x=PRR_THRESHOLD, color="#E63946", linestyle=":", linewidth=1.5,
                alpha=0.7, label=f"PRR = {PRR_THRESHOLD} (signal threshold)")
 
@@ -378,7 +342,7 @@ def plot_forest_prr(df: pd.DataFrame):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 05_prr_forest_plot.png")
+    logging.info("  ✓ Saved: 05_prr_forest_plot.png")
 
 
 def plot_forest_ror(df: pd.DataFrame):
@@ -435,7 +399,7 @@ def plot_forest_ror(df: pd.DataFrame):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 06_ror_forest_plot.png")
+    logging.info("  ✓ Saved: 06_ror_forest_plot.png")
 
 
 def plot_signal_summary(df: pd.DataFrame):
@@ -443,7 +407,6 @@ def plot_signal_summary(df: pd.DataFrame):
     Summary heatmap-style table showing signal status for all drug×reaction
     combinations with color coding.
     """
-    # Filter for suicidal ideation specifically (the main outcome)
     df_pivot = df.pivot_table(
         index="display_name",
         columns="reaction_term",
@@ -460,7 +423,6 @@ def plot_signal_summary(df: pd.DataFrame):
 
     fig, ax = plt.subplots(figsize=(16, 8))
 
-    # Create numeric encoding for coloring
     signal_numeric = signal_pivot.replace(
         {"SIGNAL": 2, "NO SIGNAL": 1, "INSUFFICIENT DATA": 0}
     ).astype(float)
@@ -481,7 +443,6 @@ def plot_signal_summary(df: pd.DataFrame):
         vmax=2,
     )
 
-    # Custom legend
     legend_elements = [
         mpatches.Patch(color="#E63946", label="SIGNAL (PRR≥2, χ²≥4, N≥3)"),
         mpatches.Patch(color="#457B9D", label="NO SIGNAL"),
@@ -514,14 +475,14 @@ def plot_signal_summary(df: pd.DataFrame):
         bbox_inches="tight",
     )
     plt.close()
-    print("  ✓ Saved: 07_signal_summary_table.png")
+    logging.info("  ✓ Saved: 07_signal_summary_table.png")
 
 
 def print_key_findings(df: pd.DataFrame):
     """Print a formatted summary of key findings to the console."""
-    print("\n" + "=" * 70)
-    print("KEY FINDINGS — Suicidal Ideation Signal Detection")
-    print("=" * 70)
+    logging.info("\n" + "=" * 70)
+    logging.info("KEY FINDINGS — Suicidal Ideation Signal Detection")
+    logging.info("=" * 70)
 
     df_si = df[df["reaction_term"] == "SUICIDAL IDEATION"].sort_values(
         "PRR", ascending=False
@@ -529,47 +490,43 @@ def print_key_findings(df: pd.DataFrame):
 
     for _, row in df_si.iterrows():
         status_icon = "🔴" if row["Signal_Status"] == "SIGNAL" else "🟢"
-        print(f"\n  {status_icon} {row['display_name']}")
-        print(f"     PRR = {row['PRR']:.3f} "
+        logging.info(f"\n  {status_icon} {row['display_name']}")
+        logging.info(f"     PRR = {row['PRR']:.3f} "
               f"[{row['PRR_lower_95CI']:.3f}–{row['PRR_upper_95CI']:.3f}]")
-        print(f"     ROR = {row['ROR']:.3f} "
+        logging.info(f"     ROR = {row['ROR']:.3f} "
               f"[{row['ROR_lower_95CI']:.3f}–{row['ROR_upper_95CI']:.3f}]")
-        print(f"     χ²  = {row['Chi_squared']:.1f}  |  N = {row['n_cases (a)']}")
-        print(f"     Status: {row['Signal_Status']}")
+        logging.info(f"     χ²  = {row['Chi_squared']:.1f}  |  N = {row['n_cases (a)']}")
+        logging.info(f"     Status: {row['Signal_Status']}")
 
-    # Overall conclusion
     signals = df_si[df_si["Signal_Status"] == "SIGNAL"]
-    print(f"\n{'=' * 70}")
+    logging.info(f"\n{'=' * 70}")
     if not signals.empty:
         top_signal = signals.iloc[0]
-        print(f"⚠  {len(signals)} SSRI(s) meet Evans et al. signal criteria "
+        logging.info(f"⚠  {len(signals)} SSRI(s) meet Evans et al. signal criteria "
               f"for suicidal ideation.")
-        print(f"   Strongest signal: {top_signal['display_name']} "
+        logging.info(f"   Strongest signal: {top_signal['display_name']} "
               f"(PRR = {top_signal['PRR']:.3f})")
     else:
-        print("✓  No SSRIs met all three Evans et al. signal criteria "
+        logging.info("✓  No SSRIs met all three Evans et al. signal criteria "
               "for suicidal ideation.")
-    print(f"{'=' * 70}")
+    logging.info(f"{'=' * 70}")
 
 
-# =============================================================================
-# MAIN
-# =============================================================================
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    print("=" * 70)
-    print("SIGNAL DETECTION — Disproportionality Analysis")
-    print("SSRIs × Suicidality-Related Adverse Events")
-    print("=" * 70)
+    logging.info("=" * 70)
+    logging.info("SIGNAL DETECTION — Disproportionality Analysis")
+    logging.info("SSRIs × Suicidality-Related Adverse Events")
+    logging.info("=" * 70)
 
     df_results = run_signal_detection()
 
-    print(f"\nCalculated PRR/ROR for {len(df_results)} drug-event combinations.")
-    print(f"Results saved: outputs/signal_detection_results.csv\n")
+    logging.info(f"\nCalculated PRR/ROR for {len(df_results)} drug-event combinations.")
+    logging.info(f"Results saved: outputs/signal_detection_results.csv\n")
 
-    print("Generating visualizations...\n")
+    logging.info("Generating visualizations...\n")
     plot_forest_prr(df_results)
     plot_forest_ror(df_results)
     plot_signal_summary(df_results)

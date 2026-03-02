@@ -1,24 +1,5 @@
-"""
-==============================================================================
-app.py — SSRI Pharmacovigilance Signal Detection Dashboard (Streamlit)
-==============================================================================
 
-Interactive dashboard for exploring FDA FAERS data on SSRI antidepressants
-and suicidality-related adverse events.
-
-Features:
-    - Overview of the dataset and methodology
-    - Interactive EDA visualizations
-    - Signal detection results (PRR/ROR) with filtering
-    - Drug-reaction network visualization
-
-Usage:
-    streamlit run app.py
-
-Author: Sebastian Lijewski, PhD
-==============================================================================
-"""
-
+import logging
 import os
 import streamlit as st
 import pandas as pd
@@ -26,9 +7,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# =============================================================================
-# PAGE CONFIGURATION
-# =============================================================================
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+
 
 st.set_page_config(
     page_title="SSRI Signal Detection — FAERS",
@@ -37,9 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# =============================================================================
-# DATA LOADING (cached for performance)
-# =============================================================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -59,9 +37,6 @@ def load_data():
     return reactions, totals, background, signals
 
 
-# =============================================================================
-# SIDEBAR
-# =============================================================================
 
 def render_sidebar():
     """Render the sidebar with navigation and information."""
@@ -93,9 +68,6 @@ def render_sidebar():
     return page
 
 
-# =============================================================================
-# PAGE: OVERVIEW
-# =============================================================================
 
 def page_overview(df_totals, df_background):
     """Render the Overview page."""
@@ -104,7 +76,6 @@ def page_overview(df_totals, df_background):
 
     st.markdown("---")
 
-    # Key metrics
     total_faers = df_background["total_faers_reports"].iloc[0]
     total_ssri = df_totals["total_reports"].sum()
 
@@ -116,32 +87,27 @@ def page_overview(df_totals, df_background):
 
     st.markdown("---")
 
-    # Methodology section
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
         st.markdown(
             """
-            ## Research Question
 
             > **Which SSRI drugs show the strongest disproportionality signal
             > for suicidal ideation in the FDA FAERS database?**
 
-            ## Methodology
 
             This project applies **Disproportionality Analysis (DA)**, the
             standard quantitative method used by regulatory agencies (FDA, EMA)
             and pharmaceutical companies for pharmacovigilance signal detection
             in spontaneous reporting systems.
 
-            ### Metrics Calculated:
             - **PRR** (Proportional Reporting Ratio) — compares the proportion
               of a reaction for a specific drug vs. all other drugs
             - **ROR** (Reporting Odds Ratio) — odds-ratio analogue for
               pharmacovigilance data
             - **χ²** (Chi-squared) — statistical significance test
 
-            ### Signal Criteria (Evans et al., 2001):
             A safety signal is flagged when **all three conditions** are met:
             - PRR ≥ 2.0
             - χ² ≥ 4.0 (p < 0.05)
@@ -160,7 +126,6 @@ def page_overview(df_totals, df_background):
         st.markdown("---")
         st.markdown(
             """
-            ## The 2×2 Contingency Table
             |  | Reaction | Other |
             |---|---|---|
             | **Drug** | a | b |
@@ -171,15 +136,11 @@ def page_overview(df_totals, df_background):
         )
 
 
-# =============================================================================
-# PAGE: EDA
-# =============================================================================
 
 def page_eda(df_reactions, df_totals):
     """Render the Exploratory Data Analysis page."""
     st.title("📊 Exploratory Data Analysis")
 
-    # --- Total reports bar chart ---
     st.markdown("### FAERS Reporting Volume by SSRI")
 
     df_sorted = df_totals.sort_values("total_reports", ascending=True)
@@ -197,11 +158,10 @@ def page_eda(df_reactions, df_totals):
         height=400,
         xaxis_tickformat=",",
     )
-    st.plotly_chart(fig_totals, use_container_width=True)
+    st.plotly_chart(fig_totals, width="stretch")
 
     st.markdown("---")
 
-    # --- Interactive: select drug to see top reactions ---
     st.markdown("### Top Adverse Events by Drug")
     col1, col2 = st.columns([1, 3])
 
@@ -228,11 +188,10 @@ def page_eda(df_reactions, df_totals):
             labels={"count": "Number of Reports", "reaction_term": "Adverse Event"},
         )
         fig_top.update_layout(height=max(400, top_n * 25), showlegend=False)
-        st.plotly_chart(fig_top, use_container_width=True)
+        st.plotly_chart(fig_top, width="stretch")
 
     st.markdown("---")
 
-    # --- Heatmap ---
     st.markdown("### Drug × Reaction Heatmap (Top 25 Reactions)")
 
     top_reactions = (
@@ -261,7 +220,6 @@ def page_eda(df_reactions, df_totals):
     )
     fig_heat.update_layout(height=700)
 
-    # Add text annotations with actual counts
     for i, row_name in enumerate(heatmap_data.index):
         for j, col_name in enumerate(heatmap_data.columns):
             val = heatmap_data.loc[row_name, col_name]
@@ -272,12 +230,9 @@ def page_eda(df_reactions, df_totals):
                 font=dict(size=8, color="black" if val < 5000 else "white"),
             )
 
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.plotly_chart(fig_heat, width="stretch")
 
 
-# =============================================================================
-# PAGE: SIGNAL DETECTION
-# =============================================================================
 
 def page_signal_detection(df_signals):
     """Render the Signal Detection results page."""
@@ -297,7 +252,6 @@ def page_signal_detection(df_signals):
         """
     )
 
-    # --- Filters ---
     col1, col2 = st.columns(2)
     with col1:
         selected_reaction = st.selectbox(
@@ -312,7 +266,6 @@ def page_signal_detection(df_signals):
     if show_signals_only:
         df_filtered = df_filtered[df_filtered["Signal_Status"] == "SIGNAL"]
 
-    # --- Results table with color coding ---
     st.markdown(f"### Results for: *{selected_reaction}*")
 
     df_display = df_filtered[[
@@ -326,7 +279,6 @@ def page_signal_detection(df_signals):
         "ROR", "ROR Lower", "ROR Upper", "χ²", "Signal"
     ]
 
-    # Color-code the signal column
     def color_signal(val):
         if val == "SIGNAL":
             return "background-color: #FECDD3; color: #991B1B; font-weight: bold"
@@ -341,18 +293,16 @@ def page_signal_detection(df_signals):
         "χ²": "{:.1f}", "N Cases": "{:,.0f}",
     })
 
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(styled, width="stretch", hide_index=True)
 
     st.markdown("---")
 
-    # --- Interactive Forest Plot (PRR) ---
     st.markdown("### PRR Forest Plot")
 
     df_plot = df_filtered.sort_values("PRR", ascending=True).copy()
 
     fig_forest = go.Figure()
 
-    # Confidence intervals
     for _, row in df_plot.iterrows():
         color = "#E63946" if row["Signal_Status"] == "SIGNAL" else "#457B9D"
         fig_forest.add_trace(go.Scatter(
@@ -382,7 +332,6 @@ def page_signal_detection(df_signals):
             ),
         ))
 
-    # Reference lines
     fig_forest.add_vline(x=1, line_dash="dash", line_color="gray",
                          annotation_text="PRR=1")
     fig_forest.add_vline(x=2, line_dash="dot", line_color="red",
@@ -394,9 +343,8 @@ def page_signal_detection(df_signals):
         height=400,
         xaxis=dict(range=[0, None]),
     )
-    st.plotly_chart(fig_forest, use_container_width=True)
+    st.plotly_chart(fig_forest, width="stretch")
 
-    # --- Full results across all reactions ---
     st.markdown("---")
     st.markdown("### Complete Signal Detection Results")
 
@@ -410,12 +358,9 @@ def page_signal_detection(df_signals):
     styled_all = df_all.style.map(color_signal, subset=["Signal"])
     styled_all = styled_all.format({"PRR": "{:.3f}", "χ²": "{:.1f}"})
 
-    st.dataframe(styled_all, use_container_width=True, hide_index=True, height=500)
+    st.dataframe(styled_all, width="stretch", hide_index=True, height=500)
 
 
-# =============================================================================
-# PAGE: NETWORK VIEW
-# =============================================================================
 
 def page_network(df_reactions):
     """Render a drug-reaction network as a Plotly force-directed graph."""
@@ -425,7 +370,6 @@ def page_network(df_reactions):
         "most frequently reported adverse events."
     )
 
-    # Allow user to filter by minimum count
     min_count = st.slider(
         "Minimum report count to display edge:",
         min_value=100,
@@ -434,31 +378,24 @@ def page_network(df_reactions):
         step=100,
     )
 
-    # Filter reactions above threshold
     df_net = df_reactions[df_reactions["count"] >= min_count].copy()
 
-    # Get unique drugs and reactions
     drugs = df_net["display_name"].unique().tolist()
     reactions = df_net["reaction_term"].unique().tolist()
     all_nodes = drugs + reactions
 
-    # Create adjacency for simple Plotly scatter layout
-    # Use a circular layout for drugs and position reactions around them
     import math
 
     node_positions = {}
 
-    # Place drugs in inner circle
     for i, drug in enumerate(drugs):
         angle = 2 * math.pi * i / len(drugs)
         node_positions[drug] = (math.cos(angle) * 2, math.sin(angle) * 2)
 
-    # Place reactions in outer circle
     for i, reaction in enumerate(reactions):
         angle = 2 * math.pi * i / len(reactions)
         node_positions[reaction] = (math.cos(angle) * 5, math.sin(angle) * 5)
 
-    # Build edges
     edge_x, edge_y = [], []
     for _, row in df_net.iterrows():
         x0, y0 = node_positions[row["display_name"]]
@@ -468,7 +405,6 @@ def page_network(df_reactions):
 
     fig = go.Figure()
 
-    # Edges
     fig.add_trace(go.Scatter(
         x=edge_x, y=edge_y,
         mode="lines",
@@ -477,7 +413,6 @@ def page_network(df_reactions):
         showlegend=False,
     ))
 
-    # Drug nodes
     drug_x = [node_positions[d][0] for d in drugs]
     drug_y = [node_positions[d][1] for d in drugs]
     fig.add_trace(go.Scatter(
@@ -491,7 +426,6 @@ def page_network(df_reactions):
         showlegend=False,
     ))
 
-    # Reaction nodes (sized by total count)
     reaction_counts = df_net.groupby("reaction_term")["count"].sum()
     reaction_sizes = [
         max(8, min(25, reaction_counts.get(r, 0) / reaction_counts.max() * 25))
@@ -527,16 +461,13 @@ def page_network(df_reactions):
         plot_bgcolor="white",
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.caption(
         f"Showing {len(df_net)} drug–reaction edges with ≥ {min_count} reports. "
         f"Red = SSRI drugs, Blue = adverse reactions (sized by frequency)."
     )
 
 
-# =============================================================================
-# MAIN APP ROUTER
-# =============================================================================
 
 def main():
     df_reactions, df_totals, df_background, df_signals = load_data()

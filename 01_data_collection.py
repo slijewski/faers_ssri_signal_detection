@@ -1,3 +1,4 @@
+import logging
 """
 ==============================================================================
 01_data_collection.py — FDA FAERS Data Collection for SSRI Signal Detection
@@ -34,15 +35,12 @@ import json
 import requests
 import pandas as pd
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-# openFDA Drug Event API base URL
+
+
 BASE_URL = "https://api.fda.gov/drug/event.json"
 
-# The six major SSRIs approved by the FDA
-# Generic names are used as they match the openFDA 'generic_name' field
 SSRI_DRUGS = {
     "fluoxetine":    "Fluoxetine (Prozac)",
     "sertraline":    "Sertraline (Zoloft)",
@@ -52,8 +50,6 @@ SSRI_DRUGS = {
     "fluvoxamine":   "Fluvoxamine (Luvox)",
 }
 
-# Suicidality-related MedDRA Preferred Terms (PTs) for focused analysis
-# These cover the spectrum from ideation to completed events
 SUICIDALITY_TERMS = [
     "Suicidal ideation",
     "Suicide attempt",
@@ -64,21 +60,13 @@ SUICIDALITY_TERMS = [
     "Depression suicidal",
 ]
 
-# Rate limiting: openFDA allows ~240 requests/minute without an API key
-# We add a small delay between requests to be a good API citizen
 REQUEST_DELAY_SECONDS = 0.5
 
-# Maximum number of reaction terms to retrieve per drug
-# openFDA 'count' endpoint supports up to 1000
 MAX_REACTION_TERMS = 1000
 
-# Output directory
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
-# =============================================================================
-# API HELPER FUNCTIONS
-# =============================================================================
 
 def query_openfda(params: dict, max_retries: int = 3) -> dict:
     """
@@ -111,11 +99,10 @@ def query_openfda(params: dict, max_retries: int = 3) -> dict:
             return response.json()
         except requests.exceptions.HTTPError as e:
             if response.status_code == 404:
-                # 404 means no results found — this is a valid "zero" result
                 return {"meta": {"results": {"total": 0}}, "results": []}
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                print(f"  [RETRY] Attempt {attempt + 1} failed ({e}). "
+                wait_time = 2 ** attempt
+                logging.info(f"  [RETRY] Attempt {attempt + 1} failed ({e}). "
                       f"Waiting {wait_time}s...")
                 time.sleep(wait_time)
             else:
@@ -123,7 +110,7 @@ def query_openfda(params: dict, max_retries: int = 3) -> dict:
         except requests.exceptions.RequestException as e:
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt
-                print(f"  [RETRY] Connection error ({e}). Waiting {wait_time}s...")
+                logging.info(f"  [RETRY] Connection error ({e}). Waiting {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
@@ -224,23 +211,15 @@ def get_total_faers_reports() -> int:
     int
         Total number of reports in FAERS.
     """
-    # Use a broad, reliable query — searching for "serious:1" OR "serious:2"
-    # captures virtually all reports without complex date range filtering
-    # that can cause 500 errors on the openFDA API
     params = {"limit": 1}
     data = query_openfda(params)
     total = data.get("meta", {}).get("results", {}).get("total", 0)
     if total == 0:
-        # Fallback: use sum of SSRIs × scaling factor as rough estimate
-        # (openFDA reports ~30M total reports as of 2024)
         total = 30_000_000
-        print("  ⚠ Could not retrieve total FAERS count. Using estimate.")
+        logging.info("  ⚠ Could not retrieve total FAERS count. Using estimate.")
     return total
 
 
-# =============================================================================
-# MAIN DATA COLLECTION PIPELINE
-# =============================================================================
 
 def collect_all_data():
     """
@@ -256,12 +235,9 @@ def collect_all_data():
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # -----------------------------------------------------------------
-    # STEP 1: Collect total report counts per SSRI
-    # -----------------------------------------------------------------
-    print("=" * 70)
-    print("STEP 1: Collecting total report counts per SSRI")
-    print("=" * 70)
+    logging.info("=" * 70)
+    logging.info("STEP 1: Collecting total report counts per SSRI")
+    logging.info("=" * 70)
 
     totals_data = []
     for generic_name, display_name in SSRI_DRUGS.items():
@@ -271,23 +247,20 @@ def collect_all_data():
             "display_name": display_name,
             "total_reports": total,
         })
-        print(f"  ✓ {display_name}: {total:,} total reports")
+        logging.info(f"  ✓ {display_name}: {total:,} total reports")
         time.sleep(REQUEST_DELAY_SECONDS)
 
     df_totals = pd.DataFrame(totals_data)
     df_totals.to_csv(os.path.join(OUTPUT_DIR, "ssri_totals.csv"), index=False)
-    print(f"\n  Saved: data/ssri_totals.csv ({len(df_totals)} drugs)\n")
+    logging.info(f"\n  Saved: data/ssri_totals.csv ({len(df_totals)} drugs)\n")
 
-    # -----------------------------------------------------------------
-    # STEP 2: Collect reaction term counts per SSRI
-    # -----------------------------------------------------------------
-    print("=" * 70)
-    print("STEP 2: Collecting adverse reaction counts per SSRI")
-    print("=" * 70)
+    logging.info("=" * 70)
+    logging.info("STEP 2: Collecting adverse reaction counts per SSRI")
+    logging.info("=" * 70)
 
     all_reactions = []
     for generic_name, display_name in SSRI_DRUGS.items():
-        print(f"\n  Fetching reactions for {display_name}...")
+        logging.info(f"\n  Fetching reactions for {display_name}...")
         reactions = get_reaction_counts(generic_name)
         for reaction in reactions:
             all_reactions.append({
@@ -296,22 +269,19 @@ def collect_all_data():
                 "reaction_term": reaction["term"],
                 "count": reaction["count"],
             })
-        print(f"  ✓ {display_name}: {len(reactions)} unique reaction terms")
+        logging.info(f"  ✓ {display_name}: {len(reactions)} unique reaction terms")
         time.sleep(REQUEST_DELAY_SECONDS)
 
     df_reactions = pd.DataFrame(all_reactions)
     df_reactions.to_csv(
         os.path.join(OUTPUT_DIR, "ssri_reaction_counts.csv"), index=False
     )
-    print(f"\n  Saved: data/ssri_reaction_counts.csv "
+    logging.info(f"\n  Saved: data/ssri_reaction_counts.csv "
           f"({len(df_reactions)} rows)\n")
 
-    # -----------------------------------------------------------------
-    # STEP 3: Collect background rates for suicidality-related terms
-    # -----------------------------------------------------------------
-    print("=" * 70)
-    print("STEP 3: Collecting FAERS background rates for suicidality terms")
-    print("=" * 70)
+    logging.info("=" * 70)
+    logging.info("STEP 3: Collecting FAERS background rates for suicidality terms")
+    logging.info("=" * 70)
 
     background_data = []
     for term in SUICIDALITY_TERMS:
@@ -320,33 +290,29 @@ def collect_all_data():
             "reaction_term": term,
             "background_count": bg_count,
         })
-        print(f"  ✓ '{term}': {bg_count:,} total reports across all drugs")
+        logging.info(f"  ✓ '{term}': {bg_count:,} total reports across all drugs")
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    # Also get the grand total of all FAERS reports
-    print("\n  Fetching total FAERS database size...")
+    logging.info("\n  Fetching total FAERS database size...")
     total_faers = get_total_faers_reports()
-    print(f"  ✓ Total FAERS reports: {total_faers:,}")
+    logging.info(f"  ✓ Total FAERS reports: {total_faers:,}")
 
     df_background = pd.DataFrame(background_data)
     df_background["total_faers_reports"] = total_faers
     df_background.to_csv(
         os.path.join(OUTPUT_DIR, "background_totals.csv"), index=False
     )
-    print(f"\n  Saved: data/background_totals.csv\n")
+    logging.info(f"\n  Saved: data/background_totals.csv\n")
 
-    # -----------------------------------------------------------------
-    # SUMMARY
-    # -----------------------------------------------------------------
-    print("=" * 70)
-    print("DATA COLLECTION COMPLETE")
-    print("=" * 70)
-    print(f"\nFiles saved to: {OUTPUT_DIR}/")
-    print(f"  • ssri_totals.csv          — {len(df_totals)} drugs")
-    print(f"  • ssri_reaction_counts.csv — {len(df_reactions)} rows")
-    print(f"  • background_totals.csv    — {len(df_background)} terms")
-    print(f"\nTotal FAERS database: {total_faers:,} reports")
-    print(f"SSRIs analyzed: {', '.join(SSRI_DRUGS.values())}")
+    logging.info("=" * 70)
+    logging.info("DATA COLLECTION COMPLETE")
+    logging.info("=" * 70)
+    logging.info(f"\nFiles saved to: {OUTPUT_DIR}/")
+    logging.info(f"  • ssri_totals.csv          — {len(df_totals)} drugs")
+    logging.info(f"  • ssri_reaction_counts.csv — {len(df_reactions)} rows")
+    logging.info(f"  • background_totals.csv    — {len(df_background)} terms")
+    logging.info(f"\nTotal FAERS database: {total_faers:,} reports")
+    logging.info(f"SSRIs analyzed: {', '.join(SSRI_DRUGS.values())}")
 
 
 if __name__ == "__main__":

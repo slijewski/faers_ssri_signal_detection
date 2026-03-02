@@ -117,15 +117,27 @@ Run the pipeline in order:
 
 ```bash
 # Step 1: Collect data from openFDA API (~2 minutes)
+# Using uv (recommended)
+uv run 01_data_collection.py
+# Or using python directly
 python 01_data_collection.py
 
 # Step 2: Generate EDA visualizations
+# Using uv (recommended)
+uv run 02_eda.py
+# Or using python directly
 python 02_eda.py
 
 # Step 3: Run disproportionality analysis
+# Using uv (recommended)
+uv run 03_signal_detection.py
+# Or using python directly
 python 03_signal_detection.py
 
 # Step 4: Launch interactive dashboard
+# Using uv (recommended)
+uv run streamlit run app.py
+# Or using streamlit directly
 streamlit run app.py
 ```
 
