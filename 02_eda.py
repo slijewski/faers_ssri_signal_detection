@@ -1,29 +1,4 @@
 import logging
-"""
-==============================================================================
-02_eda.py — Exploratory Data Analysis of SSRI Adverse Event Profiles
-==============================================================================
-
-This script performs comprehensive EDA on the FAERS data collected in Step 01.
-It generates publication-quality visualizations that reveal the adverse event
-landscape of SSRI antidepressants.
-
-Visualizations Generated:
-    1. Top 15 adverse events per SSRI (faceted horizontal bar charts)
-    2. Suicidality-related term comparison across all SSRIs (grouped bars)
-    3. Drug × Reaction heatmap (top 30 shared reactions)
-    4. Total report volume comparison (proportional bar chart)
-
-Prerequisites:
-    Run 01_data_collection.py first to generate the data/ directory.
-
-Output:
-    All figures are saved to the outputs/ directory as PNG files.
-
-Author: Sebastian Lijewski, PhD
-==============================================================================
-"""
-
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -61,14 +36,7 @@ SUICIDALITY_TERMS = [
 
 
 def load_data() -> tuple:
-    """
-    Load all CSV files produced by 01_data_collection.py.
 
-    Returns
-    -------
-    tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
-        reaction_counts, totals, background DataFrames.
-    """
     df_reactions = pd.read_csv(os.path.join(DATA_DIR, "ssri_reaction_counts.csv"))
     df_totals = pd.read_csv(os.path.join(DATA_DIR, "ssri_totals.csv"))
     df_background = pd.read_csv(os.path.join(DATA_DIR, "background_totals.csv"))
@@ -82,12 +50,7 @@ def load_data() -> tuple:
 
 
 def plot_total_reports(df_totals: pd.DataFrame):
-    """
-    Bar chart comparing total FAERS report volume per SSRI.
 
-    This contextualizes the signal detection results: drugs with more reports
-    are not necessarily more dangerous — they may simply be prescribed more.
-    """
     fig, ax = plt.subplots(figsize=(10, 6))
 
     df_sorted = df_totals.sort_values("total_reports", ascending=True)
@@ -127,12 +90,7 @@ def plot_total_reports(df_totals: pd.DataFrame):
 
 
 def plot_top_reactions_per_drug(df_reactions: pd.DataFrame, top_n: int = 15):
-    """
-    Faceted horizontal bar charts showing the top N adverse events per SSRI.
 
-    Each subplot represents one drug, allowing side-by-side comparison
-    of the most frequently reported adverse events.
-    """
     drugs = sorted(df_reactions["generic_name"].unique())
     n_drugs = len(drugs)
     fig, axes = plt.subplots(2, 3, figsize=(20, 14))
@@ -183,13 +141,7 @@ def plot_top_reactions_per_drug(df_reactions: pd.DataFrame, top_n: int = 15):
 
 
 def plot_suicidality_comparison(df_reactions: pd.DataFrame):
-    """
-    Grouped bar chart comparing suicidality-related adverse event counts
-    across all SSRIs.
 
-    This is the key clinical visualization — it directly addresses the
-    research question about differential suicidality signaling.
-    """
     df_suicidal = df_reactions[
         df_reactions["reaction_term"].isin(SUICIDALITY_TERMS)
     ].copy()
@@ -269,13 +221,7 @@ def plot_suicidality_comparison(df_reactions: pd.DataFrame):
 
 
 def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
-    """
-    Heatmap showing the relationship between drugs and their most common
-    adverse events (log-scaled).
 
-    This reveals patterns: which drugs share similar adverse event profiles,
-    and which have unique signatures.
-    """
     top_reactions = (
         df_reactions.groupby("reaction_term")["count"]
         .sum()
@@ -336,7 +282,7 @@ def plot_reaction_heatmap(df_reactions: pd.DataFrame, top_n: int = 30):
 
 
 def main():
-    """Execute the full EDA pipeline."""
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     logging.info("=" * 70)

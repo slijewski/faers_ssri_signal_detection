@@ -1,9 +1,4 @@
 import logging
-"""
-Pharmacovigilance signal detection for SSRI suicidality using
-PRR, ROR, and Chi-squared metrics.
-"""
-
 import os
 import math
 import pandas as pd
@@ -49,30 +44,7 @@ DRUG_COLORS = {
 
 
 def calculate_prr(a: int, b: int, c: int, d: int) -> dict:
-    """
-    Calculate the Proportional Reporting Ratio (PRR) and its 95% CI.
-
-    The PRR compares the proportion of a specific adverse event among all
-    reports for a drug of interest against the proportion of that event
-    among all reports for all other drugs.
-
-    Formula:
-        PRR = [a / (a + b)] / [c / (c + d)]
-
-    95% CI (log-normal):
-        ln(PRR) ± 1.96 × √(1/a - 1/(a+b) + 1/c - 1/(c+d))
-
-    Parameters
-    ----------
-    a : int — Drug + Reaction of interest
-    b : int — Drug + Other reactions
-    c : int — Other drugs + Reaction of interest
-    d : int — Other drugs + Other reactions
-
-    Returns
-    -------
-    dict with keys: 'prr', 'prr_lower', 'prr_upper'
-    """
+ 
     if a == 0 or (a + b) == 0 or c == 0 or (c + d) == 0:
         return {"prr": 0.0, "prr_lower": 0.0, "prr_upper": 0.0}
 
@@ -91,27 +63,7 @@ def calculate_prr(a: int, b: int, c: int, d: int) -> dict:
 
 
 def calculate_ror(a: int, b: int, c: int, d: int) -> dict:
-    """
-    Calculate the Reporting Odds Ratio (ROR) and its 95% CI.
-
-    The ROR is conceptually similar to an odds ratio from epidemiology.
-    It compares the odds of a specific reaction being reported for a drug
-    versus the odds for all other drugs.
-
-    Formula:
-        ROR = (a × d) / (b × c)
-
-    95% CI (log-normal):
-        ln(ROR) ± 1.96 × √(1/a + 1/b + 1/c + 1/d)
-
-    Parameters
-    ----------
-    a, b, c, d : int — values from the 2×2 contingency table
-
-    Returns
-    -------
-    dict with keys: 'ror', 'ror_lower', 'ror_upper'
-    """
+ 
     if a == 0 or b == 0 or c == 0 or d == 0:
         return {"ror": 0.0, "ror_lower": 0.0, "ror_upper": 0.0}
 
@@ -130,25 +82,7 @@ def calculate_ror(a: int, b: int, c: int, d: int) -> dict:
 
 
 def calculate_chi_squared(a: int, b: int, c: int, d: int) -> float:
-    """
-    Calculate Yates-corrected χ² for a 2×2 contingency table.
-
-    Yates' correction is applied because we are dealing with a single 2×2
-    table, and it reduces the tendency to reject H₀ too aggressively
-    with small sample sizes.
-
-    Formula:
-        χ² = N × (|ad - bc| - N/2)² / [(a+b)(c+d)(a+c)(b+d)]
-
-    Parameters
-    ----------
-    a, b, c, d : int — values from the 2×2 table
-
-    Returns
-    -------
-    float
-        Yates-corrected χ² statistic. Values ≥ 4.0 ≈ p < 0.05.
-    """
+ 
     a, b, c, d = float(a), float(b), float(c), float(d)
     n = a + b + c + d
     numerator = n * (abs(a * d - b * c) - n / 2) ** 2
@@ -161,24 +95,7 @@ def calculate_chi_squared(a: int, b: int, c: int, d: int) -> float:
 
 
 def classify_signal(prr: float, chi2: float, n_cases: int) -> str:
-    """
-    Classify whether a drug-event combination meets signal criteria.
-
-    Evans et al. (2001) criteria:
-    - PRR ≥ 2.0
-    - χ² ≥ 4.0
-    - N ≥ 3
-
-    Parameters
-    ----------
-    prr : float — Proportional Reporting Ratio
-    chi2 : float — Chi-squared statistic
-    n_cases : int — Number of reports (cell 'a')
-
-    Returns
-    -------
-    str — 'SIGNAL', 'NO SIGNAL', or 'INSUFFICIENT DATA'
-    """
+    
     if n_cases < MIN_REPORTS:
         return "INSUFFICIENT DATA"
     if prr >= PRR_THRESHOLD and chi2 >= CHI2_THRESHOLD:
@@ -188,18 +105,7 @@ def classify_signal(prr: float, chi2: float, n_cases: int) -> str:
 
 
 def run_signal_detection() -> pd.DataFrame:
-    """
-    Execute the full disproportionality analysis for all SSRI × suicidality
-    term combinations.
-
-    Constructs the 2×2 contingency table for each (drug, reaction) pair
-    using the count data from openFDA, then calculates PRR, ROR, and χ².
-
-    Returns
-    -------
-    pd.DataFrame
-        Results with columns: drug, reaction, a, b, c, d, PRR, ROR, χ², signal.
-    """
+   
     df_reactions = pd.read_csv(os.path.join(DATA_DIR, "ssri_reaction_counts.csv"))
     df_totals = pd.read_csv(os.path.join(DATA_DIR, "ssri_totals.csv"))
     df_background = pd.read_csv(os.path.join(DATA_DIR, "background_totals.csv"))
@@ -273,12 +179,7 @@ def run_signal_detection() -> pd.DataFrame:
 
 
 def plot_forest_prr(df: pd.DataFrame):
-    """
-    Forest plot of PRR values with 95% CI for 'Suicidal ideation' across SSRIs.
 
-    Forest plots are the standard visualization in pharmacoepidemiology
-    for comparing effect measures across drugs.
-    """
     df_si = df[df["reaction_term"] == "SUICIDAL IDEATION"].copy()
     df_si = df_si.sort_values("PRR", ascending=True)
 
@@ -346,9 +247,7 @@ def plot_forest_prr(df: pd.DataFrame):
 
 
 def plot_forest_ror(df: pd.DataFrame):
-    """
-    Forest plot of ROR values with 95% CI for 'Suicidal ideation'.
-    """
+
     df_si = df[df["reaction_term"] == "SUICIDAL IDEATION"].copy()
     df_si = df_si.sort_values("ROR", ascending=True)
 
@@ -403,10 +302,7 @@ def plot_forest_ror(df: pd.DataFrame):
 
 
 def plot_signal_summary(df: pd.DataFrame):
-    """
-    Summary heatmap-style table showing signal status for all drug×reaction
-    combinations with color coding.
-    """
+
     df_pivot = df.pivot_table(
         index="display_name",
         columns="reaction_term",
@@ -479,7 +375,7 @@ def plot_signal_summary(df: pd.DataFrame):
 
 
 def print_key_findings(df: pd.DataFrame):
-    """Print a formatted summary of key findings to the console."""
+
     logging.info("\n" + "=" * 70)
     logging.info("KEY FINDINGS — Suicidal Ideation Signal Detection")
     logging.info("=" * 70)

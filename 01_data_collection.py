@@ -1,34 +1,4 @@
 import logging
-"""
-==============================================================================
-01_data_collection.py — FDA FAERS Data Collection for SSRI Signal Detection
-==============================================================================
-
-This script queries the openFDA Drug Adverse Event API to collect adverse
-event reporting data for six Selective Serotonin Reuptake Inhibitors (SSRIs).
-
-Data Sources:
-    - openFDA Drug Event API: https://open.fda.gov/apis/drug/event/
-    - No API key required (rate-limited to ~240 requests/minute)
-
-Methodology:
-    For each SSRI, we collect:
-    1. Total number of adverse event reports (denominator for PRR calculation)
-    2. Top 1000 adverse reaction terms with their counts (numerators)
-    3. Overall FAERS background totals (all-drug comparator)
-
-    The 'count' endpoint aggregates results server-side, avoiding the need
-    to download and process millions of individual reports.
-
-Output:
-    - data/ssri_reaction_counts.csv   — reaction term counts per SSRI
-    - data/ssri_totals.csv            — total report counts per drug
-    - data/background_totals.csv      — overall FAERS background rates
-
-Author: Sebastian Lijewski, PhD
-==============================================================================
-"""
-
 import os
 import time
 import json
@@ -69,29 +39,7 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
 def query_openfda(params: dict, max_retries: int = 3) -> dict:
-    """
-    Execute a query against the openFDA Drug Event API with retry logic.
 
-    The openFDA API can occasionally return 5xx errors under heavy load.
-    This function implements exponential backoff to handle transient failures.
-
-    Parameters
-    ----------
-    params : dict
-        Query parameters (search, count, limit, skip).
-    max_retries : int
-        Maximum number of retry attempts on failure.
-
-    Returns
-    -------
-    dict
-        Parsed JSON response from the API.
-
-    Raises
-    ------
-    requests.exceptions.HTTPError
-        If the API returns a non-200 status after all retries.
-    """
     for attempt in range(max_retries):
         try:
             response = requests.get(BASE_URL, params=params, timeout=30)
@@ -119,22 +67,7 @@ def query_openfda(params: dict, max_retries: int = 3) -> dict:
 
 
 def get_total_reports(drug_name: str) -> int:
-    """
-    Get the total number of adverse event reports for a specific drug.
 
-    This queries the API with limit=1 to minimize data transfer while
-    still retrieving the total count from the metadata.
-
-    Parameters
-    ----------
-    drug_name : str
-        Generic drug name (e.g., 'fluoxetine').
-
-    Returns
-    -------
-    int
-        Total number of reports in FAERS for this drug.
-    """
     params = {
         "search": f'patient.drug.openfda.generic_name:"{drug_name}"',
         "limit": 1,
@@ -144,26 +77,7 @@ def get_total_reports(drug_name: str) -> int:
 
 
 def get_reaction_counts(drug_name: str, limit: int = MAX_REACTION_TERMS) -> list:
-    """
-    Get the top adverse reaction terms and their counts for a specific drug.
 
-    Uses the openFDA 'count' endpoint, which performs server-side aggregation
-    and returns term-frequency pairs. This is far more efficient than
-    downloading individual reports.
-
-    Parameters
-    ----------
-    drug_name : str
-        Generic drug name (e.g., 'fluoxetine').
-    limit : int
-        Maximum number of reaction terms to retrieve (max 1000).
-
-    Returns
-    -------
-    list of dict
-        Each dict has 'term' (reaction name) and 'count' (frequency).
-        Example: [{'term': 'Nausea', 'count': 7516}, ...]
-    """
     params = {
         "search": f'patient.drug.openfda.generic_name:"{drug_name}"',
         "count": "patient.reaction.reactionmeddrapt.exact",
@@ -174,23 +88,7 @@ def get_reaction_counts(drug_name: str, limit: int = MAX_REACTION_TERMS) -> list
 
 
 def get_background_reaction_count(reaction_term: str) -> int:
-    """
-    Get the total number of reports containing a specific reaction term
-    across ALL drugs in FAERS (background rate).
 
-    This is essential for calculating PRR — we need to know how common
-    a reaction is across the entire database, not just for one drug.
-
-    Parameters
-    ----------
-    reaction_term : str
-        MedDRA Preferred Term (e.g., 'Suicidal ideation').
-
-    Returns
-    -------
-    int
-        Total reports with this reaction across all drugs.
-    """
     params = {
         "search": f'patient.reaction.reactionmeddrapt:"{reaction_term}"',
         "limit": 1,
@@ -200,17 +98,7 @@ def get_background_reaction_count(reaction_term: str) -> int:
 
 
 def get_total_faers_reports() -> int:
-    """
-    Get the approximate total number of reports in the FAERS database.
 
-    This serves as the grand total denominator for disproportionality
-    calculations. We query without any search filter to get the overall count.
-
-    Returns
-    -------
-    int
-        Total number of reports in FAERS.
-    """
     params = {"limit": 1}
     data = query_openfda(params)
     total = data.get("meta", {}).get("results", {}).get("total", 0)
@@ -222,17 +110,7 @@ def get_total_faers_reports() -> int:
 
 
 def collect_all_data():
-    """
-    Main pipeline: collect all SSRI adverse event data from openFDA.
 
-    This function orchestrates the entire data collection process:
-    1. Fetches total report counts for each SSRI (denominators)
-    2. Fetches top reaction term counts for each SSRI (numerators)
-    3. Fetches background rates for suicidality terms (comparators)
-    4. Fetches the overall FAERS database size (grand total)
-
-    All results are saved as CSV files in the data/ directory.
-    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     logging.info("=" * 70)

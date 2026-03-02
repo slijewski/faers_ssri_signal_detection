@@ -115,39 +115,28 @@ The Streamlit application provides four views:
 
 Run the pipeline in order:
 
-
-1. Collect data from openFDA API (~2 minutes)
 ```bash
+# Step 1: Collect data from openFDA API (~2 minutes)
 # Using uv (recommended)
 uv run 01_data_collection.py
-
 # Or using python directly
 python 01_data_collection.py
-```
 
-2. Generate EDA visualizations
-```bash
+# Step 2: Generate EDA visualizations
 # Using uv (recommended)
 uv run 02_eda.py
-
 # Or using python directly
 python 02_eda.py
-```
 
-3. Run disproportionality analysis
-```bash
+# Step 3: Run disproportionality analysis
 # Using uv (recommended)
 uv run 03_signal_detection.py
-
 # Or using python directly
 python 03_signal_detection.py
-```
 
-4. Launch interactive dashboard
-```bash
+# Step 4: Launch interactive dashboard
 # Using uv (recommended)
 uv run streamlit run app.py
-
 # Or using streamlit directly
 streamlit run app.py
 ```
@@ -201,5 +190,3 @@ streamlit run app.py
 
 Sebastian Lijewski
 PhD in Pharmaceutical Sciences
-
-

@@ -1,15 +1,9 @@
-
-import logging
 import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
-
 
 st.set_page_config(
     page_title="SSRI Signal Detection — FAERS",
@@ -18,11 +12,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
-
 
 @st.cache_data
 def load_data():
